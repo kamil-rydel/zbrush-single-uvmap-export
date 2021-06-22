@@ -1,0 +1,416 @@
+[IConfig, 3.1]
+
+[VarSet, isExportingHighPoly, 1]
+[VarSet, isUnwrappingLowPoly, 0]
+[VarSet, isExportingBakeMesh, 0]
+[VarSet, isExportingLowPoly, 0]
+
+[Loop, [SubToolGetCount], 
+    [SubToolSelect, n]
+
+    [If, ([StrFind, "_low", [IGetTitle, Tool:ItemInfo]] > -1),
+        [VarSet, isExportingHighPoly, 0]
+        [VarSet, isUnwrappingLowPoly, 0]
+        [VarSet, isExportingLowPoly, 1]
+
+        [LoopExit]
+    ]
+
+    [If, ([StrFind, "_unwrap", [IGetTitle, Tool:ItemInfo]] > -1),
+        [VarSet, isExportingHighPoly, 0]
+        [VarSet, isUnwrappingLowPoly, 0]
+        [VarSet, isExportingBakeMesh, 1]
+
+        [LoopExit]
+    ]
+
+    [If, ([StrFind, "_high", [IGetTitle, Tool:ItemInfo]] > -1),
+        [VarSet, isExportingHighPoly, 0]
+        [VarSet, isUnwrappingLowPoly, 1]
+    ]
+,n]
+
+[RoutineDef, Merge
+,
+    [VarSet, subtoolIndex, -1]
+
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, subtoolName, [IGetTitle, Tool:ItemInfo]] > -1),
+            [VarSet, subtoolIndex, n]
+            [LoopExit]
+        ]
+    ,n]
+
+    [Loop, 99999,
+        [SubToolSelect, subtoolIndex + 1]
+
+        [If, ([StrFind, subtoolName, [IGetTitle, Tool:ItemInfo]] > -1),
+            [SubToolSelect, subtoolIndex]
+            [IPress, Tool:SubTool:MergeDown]
+            [SubToolSelect, subtoolIndex]
+            ,
+            [LoopExit]
+        ]
+    ]
+, subtoolName
+]
+
+[RoutineDef, MergeMatching
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [VarSet, subtoolName, [StrExtract, [IGetTitle, Tool:ItemInfo], 0, [StrFind, "#", [IGetTitle, Tool:ItemInfo]] -1]]
+
+            [Loop, [SubToolGetCount],
+                [SubToolSelect, x]
+
+                [If, 
+                    ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1) &
+                    ([StrFind, subtoolName, [IGetTitle, Tool:ItemInfo]] > -1),
+
+                    [RoutineCall, Rename, subtoolName, "_low"]
+                ]
+            ,x]
+
+            [RoutineCall, Merge, [StrMerge, subtoolName, "_low"]]
+        ]
+    ,n]
+, contains
+]
+
+[RoutineDef, MergePolygroups
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [IPress, Tool:Polypaint:Polypaint From Polygroups]
+            [IPress, Tool:Polygroups:GroupVisible]
+        ]
+    ,n]
+, contains
+]
+
+[RoutineDef, MergeOrdered
+,
+    [VarSet, subtoolIndex, 0]
+    [VarSet, maxPolyCount, 0]
+    [VarSet, topSubtoolId, 0]
+    [VarSet, maxPolyIndex, 0]
+
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+        [VarSet, polyCount, 0]
+
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [Mesh3DGet, 0,,, polyCount]
+
+            [If, (polyCount > maxPolyCount),
+                [VarSet, maxPolyCount, polyCount]
+                [VarSet, topSubtoolId, [SubToolGetID]]
+                [VarSet, maxPolyIndex, n]
+            ]
+        ]
+    ,n]
+
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+        [VarSet, subtoolName, [IGetTitle, Tool:ItemInfo]]
+
+        [If, ([StrFind, contains, subtoolName] > -1),
+            [VarSet, orderIndex, [StrExtract, subtoolName, [StrFind, "#", subtoolName] + 1, [StrFind, "_", subtoolName] - 1]]
+            [RoutineCall, Rename, "Merge_unwrap", subtoolIndex]
+
+            /*
+            If we place the highest polycount subtool at the top before merge down,
+            then we get a reliable split order of highest polycount subtool at the index 0
+            and the other subtools in a reverse pre-merge order (last ends up at index 1).
+            */
+
+            [If, ([SubToolGetID] == topSubtoolId),
+                [MVarSet, KR_mergeOrder, 0, orderIndex]
+                ,
+                [If, (subtoolIndex < maxPolyIndex),
+                    [MVarSet, KR_mergeOrder, subtoolIndex + 1, orderIndex]
+                    ,
+                    [MVarSet, KR_mergeOrder, subtoolIndex, orderIndex]
+                ]
+            ]
+
+            [VarSet, subtoolIndex, subtoolIndex + 1]
+        ]
+    ,n]
+    
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([SubToolGetID] == topSubtoolId),
+            [RoutineCall, MoveToTop]
+            [LoopExit]
+        ]
+    ,n]
+
+    [RoutineCall, Merge, "_unwrap"]
+, contains
+]
+
+[RoutineDef, SplitByGroup
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [IPress, Tool:SubTool:Groups Split]
+            [LoopExit]
+        ]
+    ,n]
+, contains
+]
+
+[RoutineDef, Restore
+,
+    [VarSet, subtoolCount, 0]
+
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, "_low", [IGetTitle, Tool:ItemInfo]] > -1),
+            [VarSet, subtoolCount, subtoolCount + 1]
+        ]
+    ,n]
+
+    [Loop, subtoolCount,
+        [VarSet, subtoolIndex, [MVarGet, KR_mergeOrder, n]]
+
+        [Loop, [SubToolGetCount],
+            [SubToolSelect, x]
+            [VarSet, subtoolName, [IGetTitle, Tool:ItemInfo]]
+
+            [If, 
+                ([StrFind, [StrMerge, "#", subtoolIndex, "_"], subtoolName] > -1) &
+                ([StrFind, "_high", subtoolName] > -1),
+
+                [SubToolSelect, n]
+                [RoutineCall, Rename, [StrMerge, [StrExtract, subtoolName, 0, [StrFind, "#", subtoolName]], subtoolIndex], "_low"]
+                [LoopExit]
+            ]
+        ,x]        
+    ,n]
+]
+
+[RoutineDef, MoveToTop
+,
+    [Loop, 99999,
+        [VarSet, subtoolIndex, [SubToolLocate, [SubToolGetID]]]
+        [IPress, Tool:SubTool:MoveUp]
+
+        [If, (subtoolIndex == 0) & ([SubtoolGetFolderIndex] > -1),
+            [IPress, "Tool:SubTool:New Folder"]
+        ]
+
+        [If, (subtoolIndex == 0) & ([SubtoolGetFolderIndex] == -1),
+            [LoopExit]
+        ]
+    ]
+]
+
+[RoutineDef, SwitchVisibility
+,
+    [RoutineCall, MoveToTop]
+    [ISet, "Tool:SubTool:Subtool Scrollbar", 0, 100]
+    [VarSet, subtoolPath, [StrMerge, "Tool:SubTool:", [IGetTitle, Tool:ItemInfo]]]
+    [IClick, [StrExtract, subtoolPath, 0, [StrLength, subtoolPath] - 2], 0, 0]
+]
+
+[RoutineDef, GetVisibility
+,
+    [VarSet, subtoolStatus, [SubToolGetStatus]]
+
+    [If, (subtoolStatus & 1),
+        [VarSet, isVisible, 1]
+    ]
+, isVisible
+]
+
+[RoutineDef, SetVisibility
+,
+    [VarSet, isVisible, 0]
+    [RoutineCall, GetVisibility, isVisible] 
+
+    [If, (isVisible),
+        [If, (!visibility),
+            [RoutineCall, SwitchVisibility]
+        ]
+        ,
+        [If, (visibility),
+            [RoutineCall, SwitchVisibility]
+        ]
+    ]
+, visibility
+]
+
+[RoutineDef, HideAll
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+        [RoutineCall, SetVisibility, 0]
+    ,n]
+]
+
+[RoutineDef, UnhideFind
+, 
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+        
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [RoutineCall, SetVisibility, 1]
+        ]
+    ,n]
+, contains
+]
+
+[RoutineDef, Rename
+,
+    [RoutineCall, MoveToTop]
+    [ToolSetPath,, [StrMerge, subtoolName, append]]
+, subtoolName, append
+]
+
+[RoutineDef, Find
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [LoopExit]
+        ]
+    ,n]    
+, contains
+]
+
+[RoutineDef, RenameOrdered
+,
+    [VarSet, subtoolIndex, 0]
+    [VarSet, n, 0]
+
+    [Loop, 99999,
+        [SubToolSelect, n]
+        [VarSet, subtoolFolderIndex, [SubtoolGetFolderIndex]]
+
+        [If, (subtoolFolderIndex > -1),
+            [VarSet, subtoolIndex, subtoolIndex + 1]
+            [RoutineCall, Rename, [StrMerge, [SubToolGetFolderName, n], "#", subtoolIndex], "_high"]
+            [VarSet, n, 0]
+        ]
+
+        [VarSet, n, n + 1]
+    ]
+]
+
+[RoutineDef, Duplicate
+,
+    [VarSet, subtoolIndex, [SubToolLocate, [SubToolGetID]]]
+
+    [IPress, Tool:SubTool:Duplicate]
+    [SubToolSelect, [Val, subtoolIndex + 1]]
+    [RoutineCall, Rename, subtoolName, ""]
+, subtoolName
+]
+
+[RoutineDef, DuplicateFind
+,
+    [VarSet, subtoolIndex, 0]
+
+    [Loop, 99999,
+        [If, [SubToolGetCount] < subtoolIndex,
+            [LoopExit]
+        ]
+
+        [SubToolSelect, subtoolIndex]
+        [If, ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1),
+            [VarSet, subtoolName, [StrExtract, [IGetTitle, Tool:ItemInfo], 0, [StrFind, contains, [IGetTitle, Tool:ItemInfo]] - 1]]
+
+            [RoutineCall, Duplicate, [StrMerge, subtoolName, append]]
+            [VarSet, subtoolIndex, subtoolIndex + 1]
+        ]
+
+        [VarSet, subtoolIndex, subtoolIndex + 1]
+    ]
+, contains, append
+]
+
+[RoutineDef, ZRemesh
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, ([StrFind, subtoolName, [IGetTitle, Tool:ItemInfo]] > -1),
+            [ISet, Tool:Geometry:SDiv, 1]
+            [ISet, Tool:Geometry:Target Polygons Count, 0.1]
+
+            [IPress, Tool:Geometry:KeepGroups]
+            [IPress, Tool:Geometry:ZRemesher]
+        ]
+    ,n]
+, subtoolName
+]
+
+[RoutineDef, ExportAll
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [VarSet, isVisible, 0]
+        [RoutineCall, GetVisibility, isVisible]
+
+        [If, isVisible,
+            [IPress, Zplugin:FBX ExportImport: Export] 
+        ]
+    ,n]
+]
+
+[RoutineDef, UnwrapAll
+,
+    [IPress, Zplugin:UV Master: Unwrap All]
+]
+
+[If, isExportingHighPoly,
+    [MVarDef, KR_mergeOrder, 99, -1]
+    [RoutineCall, RenameOrdered]
+    [RoutineCall, HideAll]
+    [RoutineCall, UnhideFind, "_high"]
+    [MessageOK, "Exporting high poly, restart the script with Zscript -> Previous to continue."]
+    [RoutineCall, ExportAll]
+]
+
+[If, isUnwrappingLowPoly,
+    [RoutineCall, DuplicateFind, "_high", "_unwrap"]
+    [RoutineCall, ZRemesh, "_unwrap"]
+    [RoutineCall, MergePolygroups, "_unwrap"]
+    [RoutineCall, HideAll]
+    [RoutineCall, UnhideFind, "_unwrap"]
+    [RoutineCall, MergeOrdered, "_unwrap"]
+    [MessageOK, "UV unwrapping, restart the script with Zscript -> Previous to continue."]
+    [RoutineCall, UnwrapAll]
+]
+
+[If, isExportingBakeMesh,
+    [RoutineCall, Find, "_unwrap"]
+    [RoutineCall, Rename, [StrExtract, [IGetTitle, Tool:ItemInfo], 0, [StrFind, "_unwrap", [IGetTitle, Tool:ItemInfo]] - 1], "_low"]
+    [RoutineCall, SplitByGroup, "_low"]
+    [RoutineCall, Restore]
+    [RoutineCall, HideAll]
+    [RoutineCall, UnhideFind, "_low"]
+    [MessageOK, "Exporting bake mesh, restart the script with Zscript -> Previous to continue."]
+    [RoutineCall, ExportAll]
+]
+
+[If, isExportingLowPoly,
+    [IPress, Tool:SubTool:Uv]
+    [RoutineCall, MergeMatching, "_low"]
+    [RoutineCall, ExportAll]
+]
