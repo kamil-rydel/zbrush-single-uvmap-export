@@ -125,11 +125,9 @@
             [VarSet, orderIndex, [StrExtract, subtoolName, [StrFind, "#", subtoolName] + 1, [StrFind, "_", subtoolName] - 1]]
             [RoutineCall, Rename, "Merge_unwrap", subtoolIndex]
 
-            /*
-            If we place the highest polycount subtool at the top before merge down,
+            /* If we place the highest polycount subtool at the top before merge down,
             then we get a reliable split order of highest polycount subtool at the index 0
-            and the other subtools in a reverse pre-merge order (last ends up at index 1).
-            */
+            and the other subtools in a reverse pre-merge order (last ends up at index 1) */
 
             [If, ([SubToolGetID] == topSubtoolId),
                 [MVarSet, KR_mergeOrder, 0, orderIndex]
@@ -373,6 +371,21 @@
     ,n]
 ]
 
+[RoutineDef, KeepUVs
+,
+    [Loop, [SubToolGetCount],
+        [SubToolSelect, n]
+
+        [If, 
+            ([StrFind, contains, [IGetTitle, Tool:ItemInfo]] > -1) &
+            [IGet, Tool:SubTool:Uv] == 0,
+
+            [IPress, Tool:SubTool:Uv]
+        ]
+    ,n]
+, contains
+]
+
 [RoutineDef, UnwrapAll
 ,
     [IPress, Zplugin:UV Master: Unwrap All]
@@ -410,7 +423,7 @@
 ]
 
 [If, isExportingLowPoly,
-    [IPress, Tool:SubTool:Uv]
+    [RoutineCall, KeepUVs, "_low"]
     [RoutineCall, MergeMatching, "_low"]
     [RoutineCall, ExportAll]
 ]
